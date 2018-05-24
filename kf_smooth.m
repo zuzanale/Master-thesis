@@ -11,6 +11,8 @@ Pt_star = zeros(T,1);
 vt = zeros(T,1);
 Kt = zeros(T,1);
 Ft = zeros(T,1);
+Et = zeros(T,1); % for auxiliary smoother recursion
+Rt = zeros(T,1); % for auxiliary smoother recursion
 score_lik = zeros(size(Ht,1)+size(Qt,1),1);
 %mL = zeros(T,1);
 mZ = 1;
@@ -47,11 +49,15 @@ Lt = mT * ones(T,1) - Kt * mZ;
 Ltrans = Lt';
 
 rt = zeros(T,1);
+rt_star = zeros(T,1);
 alphat= zeros(T,1);
 Nt = zeros(T,1);
+Nt_star = zeros(T,1);
 Vt = zeros(T,1);
 ut = zeros(T,1);
 Dt = zeros(T,1);
+ut_star = zeros(T,1);
+Dt_star = zeros(T,1);
 epshat = zeros(T,1);
 etahat = zeros(T,1);
 
@@ -64,28 +70,36 @@ Nt(T,1) = N;
 alphat(T,1) = at(T,1) + Pt(T,1)*rt(T,1) + d;
 Vt(T,1) = Pt(T,1) - Pt(T,1)*N*Pt(T,1) - c;
 
-for t = T:-1:2
+for t = T:-1:1
    if t==1
-       alphat(t,1) = at(t,1) + Pt(t,1)*rt(t-1,1) + d;
-       Vt(t,1) = Pt(t,1) - Pt(t,1)*Nt(t-1,1)*Pt(t,1) - c;    
+       %alphat(t,1) = at(t,1) + Pt(t,1)*rt(t-1,1) + d;
+       %Vt(t,1) = Pt(t,1) - Pt(t,1)*Nt(t-1,1)*Pt(t,1) - c; 
+       ut(t,1) = Ft(t,1)\vt(t,1) - Kt(t,1)'*rt(t,1);
+       Dt(t,1) = inv(Ft(t,1)) + Kt(t,1)^2*Nt(t,1);
+       epshat(t,1) = Ht * ut(t,1);
+       etahat(t,1) = Qt * mR'* rt(t,1);
    else
         rt(t-1,1) = mZ'/Ft(t,1) * vt(t,1) + Ltrans(1,t) * rt(t,1);
         Nt(t-1,1) = mZ'/Ft(t,1) * mZ + Ltrans(1,t) * Nt(t,1)*Lt(t,1); 
     
         alphat(t,1) = at(t,1) + Pt(t,1)*rt(t-1,1) + d;
         Vt(t,1) = Pt(t,1) - Pt(t,1)*Nt(t-1,1)*Pt(t,1)  - c;
+        ut(t,1) = Ft(t,1)\vt(t,1) - Kt(t,1)'*rt(t,1);
+        Dt(t,1) = inv(Ft(t,1)) + Kt(t,1)^2*Nt(t,1);
+        epshat(t,1) = Ht * ut(t,1);
+        etahat(t,1) = Qt * mR'* rt(t,1);
    end
 end    
 
 %%  disturbance smoothing % this part should be rewritten 
-for t = T:-1:1
-     ut(t,1) = Ft(t,1)\vt(t,1) - Kt(t,1)'*rt(t,1);
-     Dt(t,1) = inv(Ft(t,1)) + Kt(t,1)^2*Nt(t,1);
-     epshat(t,1) = Ht * ut(t,1);
-     etahat(t,1) = Qt * mR'* rt(t,1);
+%for t = T:-1:1
+     %ut(t,1) = Ft(t,1)\vt(t,1) - Kt(t,1)'*rt(t,1);
+     %Dt(t,1) = inv(Ft(t,1)) + Kt(t,1)^2*Nt(t,1);
+     %epshat(t,1) = Ht * ut(t,1);
+     %etahat(t,1) = Qt * mR'* rt(t,1);
      %varianceEpsilont = Ht*ones(size(Dt,1),1) - Ht^2*Dt;
      %varianceEtat = Qt*ones(size(Nt,1),1) - Qt^2*Nt;
-end
+%end
 
 %% Score function calculation
 score_lik(1,1)=1/2*sum(trace(ut*ut'-Dt) * 1); %derivated by Ht
@@ -111,12 +125,30 @@ for t = 1:T
         At(t+1,1) = mT * At(t,1) + Kt(t,1)*V_x(t,1) + d;
         V_x(t,1) = -Xt(t) - c - mZ * At(t,1); 
         bt(t,1) = St(t,1)\st(t,1); 
-        at_star(t+1,1) = at(t+1,1) + At(t+1,1) * bt;
+        at_star(t+1,1) = at(t+1,1) + At(t+1,1) * bt(t,1);
         Pt_star(t+1,1) = Pt(t+1,1) - At(t+1,1) * St(t,1) * At(t+1,1)';
     end
 end
 
 %% Auxiliary Smoother
-Et
+
+%initialization
+Rt(T,1)=0;
+
+for t = T:-1:1
+   if t==1
+       Et(t,1)=Ft(t,1)\V_x(t,1) - Kt(t,1) * Rt(t,1);   
+   else
+       Et(t,1)=Ft(t,1)\V_x(t,1) - Kt(t,1) * Rt(t,1);
+       Rt(t-1,1)=mZ' * Et(t,1) + mT' * Rt(t,1);      
+       
+       %correction of disturbance smoother
+       ut_star(t,1) = ut(t,1) + Et(t,1) * bt(t,1); % bt(T,1) in the paper????
+       Dt_star(t,1) = Dt(t,1) - Et(t,1)/St(t,1)*Et(t,1)';
+       
+       rt_star(t-1,1) = rt(t-1,1) + Rt(t-1,1) * bt(t,1);
+       Nt_star(t-1,1) = Nt(t-1,1) - Rt(t-1,1)/St(t,1)* Rt(t-1,1)'; 
+   end
+end    
 
 end
