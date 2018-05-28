@@ -1,4 +1,6 @@
-function [llik,alphat,at] = kf_smooth(yt,Ht,mT,c,d,Qt,a0,P0,Xt) 
+function [llik,at,alphat,score_lik] = kf_smooth(yt,Ht,mT,c,d,Qt,a0,P0,Xt) 
+%kf_smooth(y,H,1,0,0,sigma_eps,a0,P0,Xt); 
+
 s0=0;
 S0=0;
 %% Kalman filter, matrix notation
@@ -13,7 +15,7 @@ Kt = zeros(T,1);
 Ft = zeros(T,1);
 Et = zeros(T,1); % for auxiliary smoother recursion
 Rt = zeros(T,1); % for auxiliary smoother recursion
-score_lik = zeros(size(Ht,1)+size(Qt,1),1);
+score_lik = zeros(size(Ht,1)+size(Qt,1),2);
 %mL = zeros(T,1);
 mZ = 1;
 mR = 1;
@@ -102,8 +104,8 @@ end
 %end
 
 %% Score function calculation
-score_lik(1,1)=1/2*sum(trace(ut*ut'-Dt) * 1); %derivated by Ht
-score_lik(2,1)=1/2*sum(trace(rt*rt'-Nt) * 1); %derivated by Qt
+score_lik(2,1)=1/2*sum(trace(ut*ut'-Dt) * Ht); %derivated by Ht
+score_lik(1,1)=1/2*sum(trace(rt*rt'-Nt) * Qt); %derivated by Qt
 
 %% Auxiliary filter
 % initial values
@@ -123,13 +125,18 @@ for t = 1:T
         st(t,1) = st(t-1,1) + V_x(t,1)'/Ft(t,1) * vt(t,1);
         St(t,1) = St(t-1,1) + V_x(t,1)'/Ft(t,1) * V_x(t,1);
         At(t+1,1) = mT * At(t,1) + Kt(t,1)*V_x(t,1) + d;
-        V_x(t,1) = -Xt(t) - c - mZ * At(t,1); 
-        bt(t,1) = St(t,1)\st(t,1); 
-        at_star(t+1,1) = at(t+1,1) + At(t+1,1) * bt(t,1);
-        Pt_star(t+1,1) = Pt(t+1,1) - At(t+1,1) * St(t,1) * At(t+1,1)';
+        V_x(t,1) = -Xt(t,1) - c - mZ * At(t,1); 
+        if st(t,1)==0
+            bt(t,1)=0; 
+        else
+            bt(t,1) = St(t,1)\st(t,1); 
+        end
     end
 end
-
+for t=1:T-1
+    at_star(t+1,1) = at(t+1,1) + At(t+1,1) * bt(t,1);%t+1 index in the paper
+    Pt_star(t+1,1) = Pt(t+1,1) - At(t+1,1) * St(t,1) * At(t+1,1)';%t+1 index in the paper
+end
 %% Auxiliary Smoother
 
 %initialization
@@ -138,17 +145,35 @@ Rt(T,1)=0;
 for t = T:-1:1
    if t==1
        Et(t,1)=Ft(t,1)\V_x(t,1) - Kt(t,1) * Rt(t,1);   
+       ut_star(t,1) = ut(t,1) + Et(t,1) * bt(t,1); % bt(T,1) in the paper????
+       Dt_star(t,1) = Dt(t,1) - Et(t,1)^2./St(t,1);
    else
+       if St(t,1)==0
+           Et(t,1)=Ft(t,1)\V_x(t,1) - Kt(t,1) * Rt(t,1);
+           Rt(t-1,1)=mZ' * Et(t,1) + mT' * Rt(t,1);
+           
+           Dt_star(t,1) = Dt(t,1);
+           Nt_star(t-1,1) = Nt(t-1,1);
+           
+           ut_star(t,1) = ut(t,1) + Et(t,1) * bt(t,1); % bt(T,1) in the paper????
+           rt_star(t-1,1) = rt(t-1,1) + Rt(t-1,1) * bt(t,1);
+       else
+       
        Et(t,1)=Ft(t,1)\V_x(t,1) - Kt(t,1) * Rt(t,1);
        Rt(t-1,1)=mZ' * Et(t,1) + mT' * Rt(t,1);      
        
        %correction of disturbance smoother
        ut_star(t,1) = ut(t,1) + Et(t,1) * bt(t,1); % bt(T,1) in the paper????
-       Dt_star(t,1) = Dt(t,1) - Et(t,1)/St(t,1)*Et(t,1)';
+       Dt_star(t,1) = Dt(t,1) - Et(t,1)^2./St(t,1);
        
        rt_star(t-1,1) = rt(t-1,1) + Rt(t-1,1) * bt(t,1);
        Nt_star(t-1,1) = Nt(t-1,1) - Rt(t-1,1)/St(t,1)* Rt(t-1,1)'; 
+       end
    end
 end    
 
+ 
+%% Score function recalculation
+score_lik(2,2)=1/2*sum(trace(ut_star*ut_star'-Dt_star) * Ht); %derivated by Ht
+score_lik(1,2)=1/2*sum(trace(rt_star*rt_star'-Nt_star) * Qt); %derivated by Qt
 end
