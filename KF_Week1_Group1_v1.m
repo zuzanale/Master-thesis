@@ -51,8 +51,8 @@ theta_hat(2)
  
 %% Parameter Initialisation
     y = data;
-    sigma_eps = 15099; 
-    sigma_eta = 1469.1;
+    sigma_eta = 15099; 
+    sigma_eps = 1469.1;
     
     p = 10^7;
     a = 0; 
@@ -78,7 +78,14 @@ plot(x(2:100),at(2:100),'r')
 %% Auxiliary filter
 % Regression part
 dt = zeros(T,2); %scaled analogue of the distance
+
 for tt = 1:T
+    
+    my_field = strcat('score_',num2str(tt));
+    variable.(my_field) =zeros(T,2);
+    my_field2 = strcat('score2_',num2str(tt));
+    variable.(my_field2) =zeros(T,2);
+    
     %tt = 43;
     shock = zeros(T,1);
     shock(tt) = 10; % put the shock on the first time index t=1
@@ -88,17 +95,150 @@ for tt = 1:T
     Xt2 = shock2;
     
     %KFS procedure applied
-    [~,at,alpha_hat,score_lik,ut,ut_star] = kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt); 
+    [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt); 
     [~,at2,alpha_hat2,score_lik2,ut2,ut_star2] = kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt2); 
     %[llik,alphat,at,score_lik] = kf_smooth(yt,Ht,mT,c,d,Qt,a0,P0,Xt) 
     
-    hessian = [0.0101 -0.0263;-0.0263 0.188]; %taken from the paper(in R wrong results for some reason)
+    %hessian = [0.0101 -0.0263;-0.0263 0.188]; %taken from the paper(in R wrong results for some reason)
+    hessian = [2.097215  5.352072;5.352072 36.698336]; %version fro R using KFAS
     dt(tt,1) = hessian(1,1) *  score_lik(1,2)/sqrt(hessian(1,1));
+    dt(tt,2) = hessian(2,2) *  score_lik(2,2)/sqrt(hessian(2,2));
     
+    dt2(tt,1) = (score_lik(1,3))/sqrt(hessian(1,1));
+    dt2(tt,2) =(score_lik(2,3))/sqrt(hessian(2,2));
+    
+    dt3(tt,1) = (score_lik2(1,3))/sqrt(hessian(1,1));
+    dt3(tt,2) =(score_lik2(2,3))/sqrt(hessian(2,2));
+   
+    slope_changes(tt,1) =  score_lik(2,3);
+    shocks =  score_lik(1,3);
+    
+    variable.(my_field) = score_lik;
+    variable.(my_field2)= score_lik2;
     %plot the comparison plots for ut and ut_star + rt and rt_star
-    figure(tt)
-    plot(ut,'b')
-    hold on
-    plot(ut_star,'r')
+    %figure(tt)
+    %subplot(2,1,1)
+    %plot(ut,'b')
+    %hold on
+   % plot(ut_star,'r')
+    
+   % subplot(2,1,2)
+   % plot(rt,'b')
+  %  hold on
+  %  plot(rt_star,'r')
+  
+  %figure(1);subplot(2,1,1);stem(dt(:,2));subplot(2,1,2);stem(dt(:,1))
+  %figure(2);subplot(2,1,1);stem(dt2(:,2));subplot(2,1,2);stem(dt2(:,1))
 end
 
+%%
+%  SIMULATE DATA FROM LINEAR PARAMETER-DRIVEN LOCAL-LEVEL MODEL
+%
+%  Description: 
+%  This code snippet shows how to simulate data from a  
+%  linear parameter-driven local-level (LL) model given by:
+%
+%  y(t) = c + mu(t) + epsilon(t)
+%
+%  mu(t+1) = d + mu(t) + eta(t)
+%
+%  where eps ~ NID(0,sigma_eps^2)  and  eta ~ NID(0,sigma_eta^2)
+%
+
+
+%% 1. Setup
+
+    T=100;  % sample size
+
+%% 2. Parameter Values
+
+    d = 0;      % intercept parameter in update equation
+    c = 0;     % autoregressive parameter in update equation
+    sigma_eta = 15099;  % standard error of innovations in update equation
+    sigma_eps = 1469.1;  % standard error of innovations in observation equation
+    mu1 = 1120; % define initial value for time series x
+
+%% 3. Generate Innovations
+
+    eta =  sigma_eta*randn(T,1); % generate a vector of T random normal 
+                                % variables with variance sigma_v^2
+
+    epsilon = sigma_eps*randn(T,1); % generate a vector of T random normal 
+                                % variables with variance sigma_eps^2
+
+%% 4. Define Time Series Vector
+
+    mu = zeros(T,1); % define vector of zeros of length T
+    y = zeros(T,1); % define vector of zeros of length T
+    
+%% 5. Define Initialization for Time Series
+
+    mu(1) = mu1;
+
+%% 6. Generate Time Series
+
+    for t=1:T % start recursion from t=2 to t=T
+       
+       mu(t+1) = d + mu(t) + eta(t); % update equation
+        
+       y(t) = c + mu(t) +  epsilon(t); % observation equation
+        
+    end % end recursion
+    
+%% simulate an additive shock at observation 43
+y(43) =y(43) - 0.3 * y(43);
+y(44:80) =y(44:80)*1.3;
+%% apply our algorithm for outlier detecion
+dt = zeros(T,2); %scaled analogue of the distance
+
+for tt = 1:T
+    
+    my_field = strcat('score_',num2str(tt));
+    variable.(my_field) =zeros(T,2);
+    my_field2 = strcat('score2_',num2str(tt));
+    variable.(my_field2) =zeros(T,2);
+    
+    %tt = 43;
+    shock = zeros(T,1);
+    shock(tt) = 10; % put the shock on the first time index t=1
+    Xt = shock; %dummy variables expressing a shock
+    shock2 = zeros(T,1);
+    shock2(tt:end) = 10;
+    Xt2 = shock2;
+    
+    %KFS procedure applied
+    [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt); 
+    [~,at2,alpha_hat2,score_lik2,ut2,ut_star2] = kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt2); 
+    %[llik,alphat,at,score_lik] = kf_smooth(yt,Ht,mT,c,d,Qt,a0,P0,Xt) 
+    
+    %hessian = [0.0101 -0.0263;-0.0263 0.188]; %taken from the paper(in R wrong results for some reason)
+    hessian = [2.097215  5.352072;5.352072 36.698336]; %version fro R using KFAS
+    dt(tt,1) = hessian(1,1) *  score_lik(1,2)/sqrt(hessian(1,1));
+    dt(tt,2) = hessian(2,2) *  score_lik(2,2)/sqrt(hessian(2,2));
+    
+    dt2(tt,1) = (score_lik(1,3))/sqrt(hessian(1,1));
+    dt2(tt,2) =(score_lik(2,3))/sqrt(hessian(2,2));
+    
+    dt3(tt,1) = (score_lik2(1,3))/sqrt(hessian(1,1));
+    dt3(tt,2) =(score_lik2(2,3))/sqrt(hessian(2,2));
+   
+    slope_changes(tt,1) =  score_lik(2,3);
+    shocks =  score_lik(1,3);
+    
+    variable.(my_field) = score_lik;
+    variable.(my_field2)= score_lik2;
+    %plot the comparison plots for ut and ut_star + rt and rt_star
+    %figure(tt)
+    %subplot(2,1,1)
+    %plot(ut,'b')
+    %hold on
+   % plot(ut_star,'r')
+    
+   % subplot(2,1,2)
+   % plot(rt,'b')
+  %  hold on
+  %  plot(rt_star,'r')
+  
+  %figure(1);subplot(2,1,1);stem(dt(:,2));subplot(2,1,2);stem(dt(:,1))
+  %figure(2);subplot(2,1,1);stem(dt2(:,2));subplot(2,1,2);stem(dt2(:,1))
+end

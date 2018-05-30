@@ -1,0 +1,85 @@
+
+%% ADVANCED ECONOMETRICS
+%
+%  SIMULATE DATA FROM LINEAR PARAMETER-DRIVEN LOCAL-LEVEL MODEL
+%
+%  Description: 
+%  This code snippet shows how to simulate data from a  
+%  linear parameter-driven local-level (LL) model given by:
+%
+%  y(t) = c + mu(t) + epsilon(t)
+%
+%  mu(t+1) = d + mu(t) + eta(t)
+%
+%  where eps ~ NID(0,sigma_eps^2)  and  eta ~ NID(0,sigma_eta^2)
+%
+
+
+%% 0. Clean Workspace and Command Window
+
+clear all   %clear workspace
+clc         %clear command window     
+
+%% 1. Setup
+
+    T=100;  % sample size
+
+%% 2. Parameter Values
+
+    d = 0;      % intercept parameter in update equation
+    c = 0;     % autoregressive parameter in update equation
+    sigma_eta = 15099;  % standard error of innovations in update equation
+    sigma_eps = 1469.1;  % standard error of innovations in observation equation
+    mu1 = 0; % define initial value for time series x
+
+%% 3. Generate Innovations
+
+    eta =  sigma_v*randn(T,1); % generate a vector of T random normal 
+                                % variables with variance sigma_v^2
+
+    epsilon = sigma_eps*randn(T,1); % generate a vector of T random normal 
+                                % variables with variance sigma_eps^2
+
+%% 4. Define Time Series Vector
+
+    mu = zeros(T,1); % define vector of zeros of length T
+    y = zeros(T,1); % define vector of zeros of length T
+    
+%% 5. Define Initialization for Time Series
+
+    mu(1) = mu1;
+
+%% 6. Generate Time Series
+
+    for t=1:T % start recursion from t=2 to t=T
+       
+       mu(t+1) = a + b * mu(t) + v(t); % update equation
+        
+       x(t) = mu(t) +  epsilon(t); % observation equation
+        
+    end % end recursion
+    
+%% 7. Print Time Series in Command Window
+
+[x(1:T),mu(1:T)] % display the values of x and volatility  
+                         % side by side from t=1 to t=T
+
+%% 8. Plot Data
+
+figure(1)
+
+plot(x(1:T),'k:')  % plot the time-series x in black 'k'
+
+hold on % draw next plot in same graph
+
+plot(mu(1:T),'r')  % plot volatility sigma in red 'r' 
+
+legend('data: x','conditional expectation: mu')
+
+
+
+
+
+
+
+
