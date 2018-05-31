@@ -131,51 +131,20 @@ end
 %  where eps ~ NID(0,sigma_eps^2)  and  eta ~ NID(0,sigma_eta^2)
 %
 
+T = 100; %length of simulated time series
+c = 0;
+d = 0;
+mu1 = 1120; % define initial value for state observation mu
+Ht = sigma_eps;
+Qt = sigma_eta;
 
-%% 1. Setup
+%simulate observations y^k
+[x,mu] = simulate_LL(c,d,mu1,Ht,Qt,T); 
 
-    T=100;  % sample size
-
-%% 2. Parameter Values
-
-    d = 0;      % intercept parameter in update equation
-    c = 0;     % autoregressive parameter in update equation
-    sigma_eta = 1469.163; % standard error of innovations in update equation Q
-    sigma_eps = 15098.65;  % standard error of innovations in observation equation H
-
-    mu1 = 1120; % define initial value for time series x
-
-%% 3. Generate Innovations
-
-    eta =  sigma_eta*randn(T,1); % generate a vector of T random normal 
-                                % variables with variance sigma_v^2
-
-    epsilon = sigma_eps*randn(T,1); % generate a vector of T random normal 
-                                % variables with variance sigma_eps^2
-
-%% 4. Define Time Series Vector
-
-    mu = zeros(T,1); % define vector of zeros of length T
-    x = zeros(T,1); % define vector of zeros of length T
-    
-%% 5. Define Initialization for Time Series
-
-    mu(1) = mu1;
-
-%% 6. Generate Time Series
-
-    for t=1:T % start recursion from t=2 to t=T
-       
-       mu(t+1) = d + mu(t) + eta(t); % update equation
-        
-       x(t) = c + mu(t) +  epsilon(t); % observation equation
-        
-    end % end recursion
-    
 %% simulate an additive shock at observation 43
 x2 = x; %create a copy of simulated time series
-x2(43) =x(43) - 0.3 * x(43);
-x2(44:80) =x(44:80)*1.5;
+x2(43) =x(43) - 0.2 * x(43);
+x2(44:80) =x(44:80)*1.2;
 %% apply our algorithm for outlier detecion
 dt = zeros(T,2); %scaled analogue of the distance
 
@@ -195,8 +164,8 @@ for tt = 1:T
     Xt2 = shock2;
     
     %KFS procedure applied
-    [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(x,H,1,0,0,sigma_eta,a0,P0,Xt); 
-    [~,at2,alpha_hat2,score_lik2,ut2,ut_star2] = kf_smooth_adj(x,H,1,0,0,sigma_eta,a0,P0,Xt2); 
+    [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(x2,H,1,0,0,Qt,a0,P0,Xt); 
+    [~,at2,alpha_hat2,score_lik2,ut2,ut_star2] = kf_smooth_adj(x2,H,1,0,0,Qt,a0,P0,Xt2); 
     %[llik,alphat,at,score_lik] = kf_smooth(yt,Ht,mT,c,d,Qt,a0,P0,Xt) 
     
     %hessian = [0.0101 -0.0263;-0.0263 0.188]; %taken from the paper(in R wrong results for some reason)
@@ -231,10 +200,13 @@ for tt = 1:T
   %figure(2);subplot(2,1,1);stem(dt2(:,2));subplot(2,1,2);stem(dt2(:,1))
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% envelope simulation approach
 % Monte CaRLO SIMULATION
+%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-K = 100; %number of simulations
+K = 99; %number of simulations
 T = 100; %length of simulated time series
 j = 2; %number of different types of shocks
 c = 0;
@@ -262,7 +234,45 @@ for k=1:K
         [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(xk,Ht,1,c,d,Qt,a0,P0,Xt); 
     
         %calculate delta ll - score
-        dtk(tt,1,k) = hessian(1,1) * (score_lik(1,3))/sqrt(hessian(1,1));
-        dtk(tt,2,k) = hessian(2,2) * (score_lik(2,3))/sqrt(hessian(2,2));
+        dtk(tt,1,k) = sqrt(hessian(1,1)) * (score_lik(1,3))/hessian(1,1);
+        dtk(tt,2,k) = sqrt(hessian(2,2)) * (score_lik(2,3))/hessian(2,2);
     end
 end
+
+%% produce confidence intervals/simulation envelopes
+tint99_1=zeros(k,2); % t intervals
+tint99_2=zeros(k,2); % t intervals
+tint95_1=zeros(k,2); % t intervals
+tint95_2=zeros(k,2); % t intervals
+
+for i=1:k
+    
+    %% 99% interval
+    %test dt for first type of shock
+    [h,p,ci,stats] = ttest(dtk(:,1,i),0.01);
+    tint99_1(i,:) = ci; %assign lower and upper bound to the variable
+    
+    %test dt for second type of shock 
+     [h,p,ci,stats] = ttest(dtk(:,2,i),0.01);
+    tint99_2(i,:) = ci; %assign lower and upper bound to the variable
+    
+     %% 95% interval
+    %test dt for first type of shock
+    [h,p,ci,stats] = ttest(dtk(:,1,i),0.05);
+    tint95_1(i,:) = ci; %assign lower and upper bound to the variable
+    
+    %test dt for second type of shock 
+     [h,p,ci,stats] = ttest(dtk(:,2,i),0.05);
+    tint95_2(i,:) = ci; %assign lower and upper bound to the variable
+
+end
+
+figure(1)
+stem(dt2(:,1))
+hold on
+plot(tint95_2,'b')
+
+figure(2)
+stem(dt2(:,1))
+hold on
+plot(tint99_2,'b')
