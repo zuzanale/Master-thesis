@@ -51,8 +51,8 @@ theta_hat(2)
  
 %% Parameter Initialisation
     y = data;
-    sigma_eta = 15099; 
-    sigma_eps = 1469.1;
+    sigma_eps = 15098.65; 
+    sigma_eta = 1469.163;
     
     p = 10^7;
     a = 0; 
@@ -61,20 +61,6 @@ theta_hat(2)
     H = 1;
     mT=1;
                       
-%% Apply Kalman Filter
-     [~,at,alpha_hat] = kf_smooth(y,H,1,0,0,sigma_eps,a0,P0,0);
-   
-
-%% PART E: Replicate Slide 65
-x =1871:1:1970;
-
-figure(4)
-plot(x(2:100),alpha_hat(2:100),'b')  % plot the time-series y in blue 'b'  
-hold on
-plot(x(2:100),y(2:100),'ko')
-hold on
-plot(x(2:100),at(2:100),'r')
-
 %% Auxiliary filter
 % Regression part
 dt = zeros(T,2); %scaled analogue of the distance
@@ -138,7 +124,7 @@ end
 %  This code snippet shows how to simulate data from a  
 %  linear parameter-driven local-level (LL) model given by:
 %
-%  y(t) = c + mu(t) + epsilon(t)
+%  x(t) = c + mu(t) + epsilon(t)
 %
 %  mu(t+1) = d + mu(t) + eta(t)
 %
@@ -154,8 +140,9 @@ end
 
     d = 0;      % intercept parameter in update equation
     c = 0;     % autoregressive parameter in update equation
-    sigma_eta = 15099;  % standard error of innovations in update equation
-    sigma_eps = 1469.1;  % standard error of innovations in observation equation
+    sigma_eta = 1469.163; % standard error of innovations in update equation Q
+    sigma_eps = 15098.65;  % standard error of innovations in observation equation H
+
     mu1 = 1120; % define initial value for time series x
 
 %% 3. Generate Innovations
@@ -169,7 +156,7 @@ end
 %% 4. Define Time Series Vector
 
     mu = zeros(T,1); % define vector of zeros of length T
-    y = zeros(T,1); % define vector of zeros of length T
+    x = zeros(T,1); % define vector of zeros of length T
     
 %% 5. Define Initialization for Time Series
 
@@ -181,13 +168,14 @@ end
        
        mu(t+1) = d + mu(t) + eta(t); % update equation
         
-       y(t) = c + mu(t) +  epsilon(t); % observation equation
+       x(t) = c + mu(t) +  epsilon(t); % observation equation
         
     end % end recursion
     
 %% simulate an additive shock at observation 43
-y(43) =y(43) - 0.3 * y(43);
-y(44:80) =y(44:80)*1.3;
+x2 = x; %create a copy of simulated time series
+x2(43) =x(43) - 0.3 * x(43);
+x2(44:80) =x(44:80)*1.5;
 %% apply our algorithm for outlier detecion
 dt = zeros(T,2); %scaled analogue of the distance
 
@@ -207,8 +195,8 @@ for tt = 1:T
     Xt2 = shock2;
     
     %KFS procedure applied
-    [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt); 
-    [~,at2,alpha_hat2,score_lik2,ut2,ut_star2] = kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt2); 
+    [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(x,H,1,0,0,sigma_eta,a0,P0,Xt); 
+    [~,at2,alpha_hat2,score_lik2,ut2,ut_star2] = kf_smooth_adj(x,H,1,0,0,sigma_eta,a0,P0,Xt2); 
     %[llik,alphat,at,score_lik] = kf_smooth(yt,Ht,mT,c,d,Qt,a0,P0,Xt) 
     
     %hessian = [0.0101 -0.0263;-0.0263 0.188]; %taken from the paper(in R wrong results for some reason)
@@ -241,4 +229,40 @@ for tt = 1:T
   
   %figure(1);subplot(2,1,1);stem(dt(:,2));subplot(2,1,2);stem(dt(:,1))
   %figure(2);subplot(2,1,1);stem(dt2(:,2));subplot(2,1,2);stem(dt2(:,1))
+end
+
+%% envelope simulation approach
+% Monte CaRLO SIMULATION
+
+K = 100; %number of simulations
+T = 100; %length of simulated time series
+j = 2; %number of different types of shocks
+c = 0;
+d = 0;
+mu1 = 1120; % define initial value for state observation mu
+Ht = sigma_eps;
+Qt = sigma_eta;
+hessian = [2.097215  5.352072;5.352072 36.698336]; %version fro R using KFAS
+dtk = [zeros(T,j)]; % j is a number of different types of shocks
+
+for k=1:K
+    
+    %simulate observations y^k
+    [xk,mux] = simulate_LL(c,d,mu1,Ht,Qt,T); 
+    
+    %iterate for each shock at time t from T
+    for tt = 1:T
+        
+        % create an additive shock at time tt
+        shock = zeros(T,1);
+        shock(tt) = 10; % put the shock on the first time index t=1
+        Xt = shock; %dummy variables expressing a shock
+    
+         %KFS procedure applied
+        [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(xk,Ht,1,c,d,Qt,a0,P0,Xt); 
+    
+        %calculate delta ll - score
+        dtk(tt,1,k) = hessian(1,1) * (score_lik(1,3))/sqrt(hessian(1,1));
+        dtk(tt,2,k) = hessian(2,2) * (score_lik(2,3))/sqrt(hessian(2,2));
+    end
 end
