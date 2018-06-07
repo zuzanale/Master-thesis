@@ -26,10 +26,10 @@ function [y,mu] = simulate_LL(c,d,mu1,Ht,Qt,T)
 
 %%  Generate Innovations
 
-    eta =  Qt * randn(T,1); % generate a vector of T random normal 
+    eta =  sqrt(Qt) * randn(T,1); % generate a vector of T random normal 
                                 % variables with variance sigma_v^2
 
-    epsilon = Ht * randn(T,1); % generate a vector of T random normal 
+    epsilon = sqrt(Ht) * randn(T,1); % generate a vector of T random normal 
                                 % variables with variance sigma_eps^2
 
 %% 4. Define Time Series Vector

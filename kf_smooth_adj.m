@@ -1,4 +1,4 @@
-function [llik,at,alphat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(yt,Ht,mT,c,d,Qt,a0,P0,Xt) 
+function [llik,at,alphat,score_lik,ut,ut_star,rt,rt_star,St,st] = kf_smooth_adj(yt,Ht,mT,c,d,Qt,a0,P0,Xt) 
 %kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt); 
 
 s0=0;
@@ -58,7 +58,7 @@ for t = 1:T
             st(t,1) = st(t-1,1) + V_x(t,1)'/Ft(t,1) * vt(t,1);
             St(t,1) = St(t-1,1) + V_x(t,1)'/Ft(t,1) * V_x(t,1);
         end
-        if st(t,1)==0
+        if St(t,1)==0
             bt(t,1)=0; 
         else
             bt(t,1) = St(t,1)\st(t,1); 
@@ -161,8 +161,8 @@ end
 %score_lik(2,1)=1/2*sum(trace(ut*ut'-Dt) * Ht); %derivated by Ht
 %score_lik(1,1)=1/2*sum(trace(rt*rt'-Nt) * Qt); %derivated by Qt
 
-score_lik(2,1)=1/2*sum((ut.^2-Dt)); %derivated by Ht
-score_lik(1,1)=1/2*sum((rt.^2-Nt)); %derivated by Qt
+score_lik(1,1)=1/2*sum((ut.^2-Dt)); %derivated by Ht
+score_lik(2,1)=1/2*sum((rt.^2-Nt)); %derivated by Qt
 
 for t=1:T-1
     at_star(t+1,1) = at(t+1,1) + At(t+1,1) * bt(t,1);%t+1 index in the paper
@@ -173,10 +173,19 @@ end
 %% Score function recalculation
 %score_lik(2,2)=1/2*sum(trace(ut_star*ut_star'-Dt_star) * Ht); %derivated by Ht
 %score_lik(1,2)=1/2*sum(trace(rt_star*rt_star'-Nt_star) * Qt); %derivated by Qt
-score_lik(2,2)=1/2*sum((ut_star.^2-Dt_star)); %derivated by Ht
-score_lik(1,2)=1/2*sum((rt_star.^2-Nt_star)); %derivated by Qt
+score_lik(1,2)=1/2*sum((ut_star.^2-Dt_star)); %derivated by Ht
+score_lik(2,2)=1/2*sum((rt_star.^2-Nt_star)); %derivated by Qt
 
 %%score recalculation univariate case
-score_lik(2,3) = (bt(T-1)-St(T-1)^(-1))/2 * sum(Et.^2 * 1) + bt(T-1) * sum(ut.* Et);
-score_lik(1,3) = (bt(T-1)-St(T-1)^(-1))/2 * sum(Rt.^2 * 1) + bt(T-1) * sum(rt .* Rt);
+if score_lik(1,2)==score_lik(1,1)
+    score_lik(1,3) = 0;
+else
+    score_lik(1,3) = (bt(T-1)-St(T-1)^(-1))/2 * sum(Et.^2 * 1) + bt(T-1) * sum(ut.* Et);
+end
+
+if score_lik(2,2)==score_lik(2,1)
+    score_lik(2,3) = 0;
+else
+    score_lik(2,3) = (bt(T-1)-St(T-1)^(-1))/2 * sum(Rt.^2 * 1) + bt(T-1) * sum(rt .* Rt);
+end
 end
