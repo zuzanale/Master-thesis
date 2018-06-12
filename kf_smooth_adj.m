@@ -43,12 +43,12 @@ for t = 1:T
     if t==T
         vt(t,1) = yt(t,1) - c - mZ * at(t,1);
     	Ft(t,1) = mZ * Pt(t,1) * mZ' + Ht;
-        Kt(t,1) = mT * Pt(t,1) * mZ'/Ft(t,1);
+        Kt(t,1) = mT * Pt(t,1) * mZ'* inv(Ft(t,1));
         V_x(t,1) = -Xt(t) - c - mZ * At(t,1); 
     else
         vt(t,1) = yt(t,1) - c - mZ * at(t,1);
     	Ft(t,1) = mZ * Pt(t,1) * mZ' + Ht;
-        Kt(t,1) = mT * Pt(t,1) * mZ'/Ft(t,1);
+        Kt(t,1) = mT * Pt(t,1) * mZ' *inv(Ft(t,1));
         at(t+1,1) = mT * at(t,1) + Kt(t,1)*vt(t,1) + d; 
         Pt(t+1,1) = mT * Pt(t,1)*mT' + mR*Qt*mR' - Kt(t,1)* Ft(t,1) * Kt(t,1)';
         V_x(t,1) = -Xt(t,1) - c - mZ * At(t,1);
@@ -120,13 +120,13 @@ for t = T:-1:1
            Dt_star(t,1) = Dt(t,1) - Et(t,1)^2./St(t,1);
        end
    else
-        rt(t-1,1) = mZ'/Ft(t,1) * vt(t,1) + Ltrans(1,t) * rt(t,1);
-        Nt(t-1,1) = mZ'/Ft(t,1) * mZ + Ltrans(1,t) * Nt(t,1)*Lt(t,1); 
+        rt(t-1,1) = (mZ'/Ft(t,1)) * vt(t,1)  + Ltrans(1,t) * rt(t,1);
+        Nt(t-1,1) = (mZ'/Ft(t,1)) * mZ + Ltrans(1,t) * Nt(t,1)*Lt(t,1); 
         
         alphat(t,1) = at(t,1) + Pt(t,1)*rt(t-1,1) + d;
-        Vt(t,1) = Pt(t,1) - Pt(t,1)*Nt(t-1,1)*Pt(t,1)  - c;
+        Vt(t,1) = Pt(t,1) - Pt(t,1) * Nt(t-1,1) * Pt(t,1)  - c;
         ut(t,1) = Ft(t,1)\vt(t,1) - Kt(t,1)'*rt(t,1);
-        Dt(t,1) = inv(Ft(t,1)) + Kt(t,1)^2 * Nt(t,1);
+        Dt(t,1) = inv(Ft(t,1)) + Kt(t,1)' * Nt(t,1) * Kt(t,1);
         epshat(t,1) = Ht * ut(t,1);
         etahat(t,1) = Qt * mR'* rt(t,1);
         
@@ -161,8 +161,8 @@ end
 %score_lik(2,1)=1/2*sum(trace(ut*ut'-Dt) * Ht); %derivated by Ht
 %score_lik(1,1)=1/2*sum(trace(rt*rt'-Nt) * Qt); %derivated by Qt
 
-score_lik(1,1)=1/2*sum((ut.^2-Dt)); %derivated by Ht
-score_lik(2,1)=1/2*sum((rt.^2-Nt)); %derivated by Qt
+score_lik(1,1)=1/2*sum((ut.^2-Dt)*2*Ht); %derivated by Ht
+score_lik(2,1)=1/2*sum((rt.^2-Nt)*2*Qt); %derivated by Qt
 
 for t=1:T-1
     at_star(t+1,1) = at(t+1,1) + At(t+1,1) * bt(t,1);%t+1 index in the paper
@@ -173,19 +173,19 @@ end
 %% Score function recalculation
 %score_lik(2,2)=1/2*sum(trace(ut_star*ut_star'-Dt_star) * Ht); %derivated by Ht
 %score_lik(1,2)=1/2*sum(trace(rt_star*rt_star'-Nt_star) * Qt); %derivated by Qt
-score_lik(1,2)=1/2*sum((ut_star.^2-Dt_star)); %derivated by Ht
-score_lik(2,2)=1/2*sum((rt_star.^2-Nt_star)); %derivated by Qt
+score_lik(1,2)=1/2*sum((ut_star.^2-Dt_star)*2*Ht); %derivated by Ht
+score_lik(2,2)=1/2*sum((rt_star.^2-Nt_star)*2*Qt); %derivated by Qt
 
 %%score recalculation univariate case
 if score_lik(1,2)==score_lik(1,1)
     score_lik(1,3) = 0;
 else
-    score_lik(1,3) = (bt(T-1)-St(T-1)^(-1))/2 * sum(Et.^2 * 1) + bt(T-1) * sum(ut.* Et);
+    score_lik(1,3) = (bt(T-1)-St(T-1)^(-1))/2 * sum(Et.^2 *2*Ht) + bt(T-1) * sum(ut.* Et*2*Ht);
 end
 
 if score_lik(2,2)==score_lik(2,1)
     score_lik(2,3) = 0;
 else
-    score_lik(2,3) = (bt(T-1)-St(T-1)^(-1))/2 * sum(Rt.^2 * 1) + bt(T-1) * sum(rt .* Rt);
+    score_lik(2,3) = (bt(T-1)-St(T-1)^(-1))/2 * sum(Rt.^2 *2*Qt) + bt(T-1) * sum(rt .* Rt*2*Qt);
 end
 end

@@ -29,7 +29,7 @@ data=A.data(:,1);
                          'TolFun',1e-16,... % function value convergence criteria 
                          'TolX',1e-9,... % argument convergence criteria
                          'MaxIter',100000000); % maximum number of iterations    
-        %options = optimoptions('fmincon','Algorithm','interior-point','Display','iter');
+                     
 %% 3. Initial Parameter Values to parameters that has to be estimated
 
     theta_ini = [0;0]; 
@@ -39,10 +39,9 @@ data=A.data(:,1);
         ub = [inf; inf];
       
 %% 5. Optimize Log Likelihood Criterion
-
-      [theta_hat,llik_val,exitflag,hessian]=...
+     [theta_hat,llik,exitflag,output,lambda,grad,hessian]=...
           fmincon(@(theta) - llik_fun_new(data,theta),theta_ini,[],[],[],[],lb,ub,[],options);
-    
+
 display('parameter sigma2_eta')
 theta_hat(1)
     
@@ -55,8 +54,10 @@ theta_hat(2)
     sigma_eta = 1469.163;
     
     p = 10^7;
-    a = 0; 
-    P0 = 10^7;
+    %a = 0; 
+    a =1120 ;
+    %P0 = 10^7;
+    P0 = 286379470;
     a0 = 0; 
     H = 1;
     mT=1;
@@ -65,7 +66,7 @@ theta_hat(2)
 % Regression part
 dt = zeros(T,2); %scaled analogue of the distance
 
-for tt = 1:T
+for tt = 2:T
     
     my_field = strcat('score_',num2str(tt));
     variable.(my_field) =zeros(T,2);
@@ -74,27 +75,27 @@ for tt = 1:T
     
     %tt = 43;
     shock = zeros(T,1);
-    shock(tt) = 10; % put the shock on the first time index t=1
+    shock(tt) = 1; % put the shock on the first time index t=1
     Xt = shock; %dummy variables expressing a shock
     shock2 = zeros(T,1);
-    shock2(tt:end) = 10;
+    shock2(tt:end) = 1;
     Xt2 = shock2;
     
     %KFS procedure applied
-    [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt); 
+    [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star,St,st] = kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt); 
     [~,at2,alpha_hat2,score_lik2,ut2,ut_star2] = kf_smooth_adj(y,H,1,0,0,sigma_eps,a0,P0,Xt2); 
     %[llik,alphat,at,score_lik] = kf_smooth(yt,Ht,mT,c,d,Qt,a0,P0,Xt) 
     
     %hessian = [0.0101 -0.0263;-0.0263 0.188]; %taken from the paper(in R wrong results for some reason)
-    hessian = [2.097215  5.352072;5.352072 36.698336]; %version fro R using KFAS
-    dt(tt,1) = hessian(1,1) *  score_lik(1,2)/sqrt(hessian(1,1));
-    dt(tt,2) = hessian(2,2) *  score_lik(2,2)/sqrt(hessian(2,2));
+    %hessian = [1.677492e-07 1.717391e-07;1.717391e-07 1.686288e-06]; %version fro R using KFAS
+    dt(tt,1) = (-hessian(1,1))^(-1) *  score_lik(1,2)/((-sqrt(hessian(1,1)))^(-1));
+    dt(tt,2) = (-hessian(2,2))^(-1) *  score_lik(2,2)/((-sqrt(hessian(2,2)))^(-1));
     
-    dt2(tt,1) = (score_lik(1,3))/sqrt(hessian(1,1));
-    dt2(tt,2) =(score_lik(2,3))/sqrt(hessian(2,2));
-    
-    dt3(tt,1) = (score_lik2(1,3))/sqrt(hessian(1,1));
-    dt3(tt,2) =(score_lik2(2,3))/sqrt(hessian(2,2));
+    dt2(tt,1) = (-hessian(1,1))^(-1) * score_lik(1,3);
+    dt2(tt,2) = (-hessian(2,2))^(-1) * score_lik(2,3);
+  
+    dt3(tt,1) =  (-hessian(1,1))^(-1) * score_lik2(1,3);
+    dt3(tt,2) = (-hessian(2,2))^(-1) * score_lik2(2,3);
    
     slope_changes(tt,1) =  score_lik(2,3);
     shocks =  score_lik(1,3);
@@ -115,6 +116,7 @@ for tt = 1:T
   
   %figure(1);subplot(2,1,1);stem(dt(:,2));subplot(2,1,2);stem(dt(:,1))
   %figure(2);subplot(2,1,1);stem(dt2(:,2));subplot(2,1,2);stem(dt2(:,1))
+  %figure(3);subplot(2,1,1);stem(dt(:,1),dt(:,2));subplot(2,1,2);stem(dt(:,2),dt(:,1))
 end
 
 %%
@@ -141,14 +143,16 @@ Qt = sigma_eta;
 %simulate observations y^k
 [x,mu] = simulate_LL(c,d,mu1,Ht,Qt,T); 
 
-%% simulate an additive shock at observation 43
+%% simulate an additive shocks
 x2 = x; %create a copy of simulated time series
-x2(43) =x(43) - 0.2 * x(43);
-x2(44:80) =x(44:80)*1.2;
+x2(15) = min(x2) - 0.3 * mean(x2);
+x2(45) = max(x2) + 0.2 * mean(x2);
+x2(70:90) = x2(70:90) + min(x2) + 0.15 * mean(x2) - x2(70:90) * 0.12;
+  
 %% apply our algorithm for outlier detecion
 dt = zeros(T,2); %scaled analogue of the distance
 
-for tt = 1:T
+for tt = 1:(T-10)
     
     my_field = strcat('score_',num2str(tt));
     variable.(my_field) =zeros(T,2);
@@ -160,24 +164,24 @@ for tt = 1:T
     shock(tt) = 10; % put the shock on the first time index t=1
     Xt = shock; %dummy variables expressing a shock
     shock2 = zeros(T,1);
-    shock2(tt:end) = 10;
+    shock2(tt:(tt+10)) = shock2(tt:(tt+10)) + 10;
     Xt2 = shock2;
     
     %KFS procedure applied
-    [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(x2,H,1,0,0,Qt,a0,P0,Xt); 
-    [~,at2,alpha_hat2,score_lik2,ut2,ut_star2] = kf_smooth_adj(x2,H,1,0,0,Qt,a0,P0,Xt2); 
+    [~,at,alpha_hat,score_lik,ut,ut_star,rt,rt_star] = kf_smooth_adj(x2,Ht,1,0,0,Qt,a0,P0,Xt); 
+    [~,at2,alpha_hat2,score_lik2,ut2,ut_star2] = kf_smooth_adj(x2,Ht,1,0,0,Qt,a0,P0,Xt2); 
     %[llik,alphat,at,score_lik] = kf_smooth(yt,Ht,mT,c,d,Qt,a0,P0,Xt) 
     
     %hessian = [0.0101 -0.0263;-0.0263 0.188]; %taken from the paper(in R wrong results for some reason)
     hessian = [2.097215  5.352072;5.352072 36.698336]; %version fro R using KFAS
-    dt(tt,1) = hessian(1,1) *  score_lik(1,2)/sqrt(hessian(1,1));
-    dt(tt,2) = hessian(2,2) *  score_lik(2,2)/sqrt(hessian(2,2));
+    %dt(tt,1) = hessian(1,1) *  score_lik(1,2)/sqrt(hessian(1,1));
+    %dt(tt,2) = hessian(2,2) *  score_lik(2,2)/sqrt(hessian(2,2));
     
-    dt2(tt,1) = (score_lik(1,3))/sqrt(hessian(1,1));
-    dt2(tt,2) =(score_lik(2,3))/sqrt(hessian(2,2));
+    dt2(tt,1) = ((score_lik(1,3))/(hessian(1,1)))/(hessian(1,1)^(-0.5));
+    dt2(tt,2) =((score_lik(2,3))/(hessian(2,2)))/(hessian(2,2)^(-0.5));
     
-    dt3(tt,1) = (score_lik2(1,3))/sqrt(hessian(1,1));
-    dt3(tt,2) =(score_lik2(2,3))/sqrt(hessian(2,2));
+    dt3(tt,1) = ((score_lik2(1,3))/(hessian(1,1)))/(hessian(1,1)^(-0.5));
+    dt3(tt,2) =((score_lik2(2,3))/(hessian(2,2)))/(hessian(2,2)^(-0.5));
    
     slope_changes(tt,1) =  score_lik(2,3);
     shocks =  score_lik(1,3);
