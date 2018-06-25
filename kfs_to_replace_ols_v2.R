@@ -1,65 +1,60 @@
 kfs=function(y, x, tol = 1e-07, LAPACK = FALSE, method = 1) 
-{  require(KFAS)
-  require(stsm)
-  require(dlm)
-  
-  out <- list()
-    out$n <- length(y)
-    if (is.null(x)) {
-      out$k <- 0
-    }else {
-      out$k <- NCOL(x)
-    }
-    ##############################
-    #here my part starts
-    ###################################
-    out$df <- out$n - out$k
-    if (out$k > 0) {
-      qx <- qr(x, tol, LAPACK = LAPACK)
-      out <- c(out, qx)
-      out$xtxinv <- chol2inv(qx$qr, LINPACK = FALSE)
-      #this part of if its what to do if we have less regresors then observations (shouldnt be same in our case???=> double check with DK book)
-      y=as.ts(y)
-        buildFun <- function(z) {
-       m= dlmModPoly(1, dV = exp(z[1])^2, dW = exp(z[2])^2) #+ dlmModReg(x)
-       return(m)
-      }
-      
-      res2 <- dlmMLE(y, parm = c(0,0), build = buildFun, hessian=T, method ="L-BFGS-B")#computes numerical hessian, 
-      #maybe i can change this to compute a numerical one, if i will have enough time
-      #res2$vcov
-      
-      dlmModel<- buildFun(res2$par)
-      
-      model <- KFAS:::SSModel(y ~ x +
-                               SSMtrend(1, Q = list(W(dlmModel)[1,1])), H = matrix(V(dlmModel)))
-      result = KFAS:::KFS(model, filtering = "state", smoothing = c("state"),simplify=T)
-      
-      out$coefficients = result$alphahat[ out$n,1:ncol(x)]
-      out$vcov =result$V[ 1:ncol(x), 1:ncol(x),out$n] #vcov matrix
-      out$std.error = sqrt(diag(result$V[ 1:ncol(x), 1:ncol(x),out$n]))
-
-      out$fit <- result$alphahat[out$n,(ncol(x)+1):(ncol(result$alphahat))] #smoothed values for unobserved componetns
-      
-    }else{
-      out$fit <- rep(0, out$n)
-    }
-    if (method==1){
-      out$residuals <-result$v
-    }else{
-      out$residuals <-result$v
-      #ut$residuals <-result$epshat #be careful about this, if it is used somewhere else it should be mentioned
-    }
-    ######this part needs to be replaces
-   # out$residuals2 <- out$residuals^2
-   # out$rss <- sum(out$residuals2)
-   # out$sigma2 <- solve(result$St) # this is a matrix tho(for each state)
-   # if (out$k > 0) {
-      #out$vcov <- out$sigma2 * out$xtxinv
-    #}
-    out$logl2 = result$logLik
-    out$logl <- -out$n * log(2 * pi)/2 - (1/2) * sum(log(t(result$F)) + result$v^2/t(result$F),na.rm = TRUE)
-    return(out)
+{   out <- list()
+out$n <- length(y)
+if (is.null(x)) {
+  out$k <- 0
+}else {
+  out$k <- NCOL(x)
+}
+##############################
+#here my part starts
+###################################
+out$df <- out$n - out$k
+if (out$k > 0) {
+  qx <- qr(x, tol, LAPACK = LAPACK)
+  out <- c(out, qx)
+  out$xtxinv <- chol2inv(qx$qr, LINPACK = FALSE)
+  #this part of if its what to do if we have less regresors then observations (shouldnt be same in our case???=> double check with DK book)
+  result = kafs(y, x)
+  out$coefficients =  result$bt
+  if (out$k==1){
+    out$t.stats = result$bt/sqrt((result$St)^(-1))
+    out$std.error = sqrt((result$St)^(-1))
+  }
+  else{
+    out$t.stats = result$bt/sqrt(diag((result$St)^(-1)))
+    out$std.error = sqrt(diag((result$St)^(-1)))
+  }
+ 
+  #out$eps.std = result$ut/sqrt(result$Dt)
+  #out$eps.std.star = result$ut_star/sqrt(result$Dt_star)
+  # out$eta.std= result$r/sqrt(result$N[1,1,])#this has to be fixed for alpha more than 1 dimensions
+  # out$t_stats_eps = result$epshat/sqrt(result$Dt) #t-statistics for observations
+  #out$t_stats_eps_star =((sum(crossprod(result$ut,result$Et),na.rm = TRUE)/sum(crossprod(result$Et,result$Et),na.rm = TRUE)))/result$St^(-1) #t-statistics for observation 
+  #out$t_stats_eta = result$etahat/sqrt(result$N[1,1,]) #t-statistics for state
+  #out$t_stats_eta_star =((sum(crossprod(result$r, result$Rt),na.rm = TRUE) /sum(crossprod(result$Rt,result$Rt),na.rm = TRUE)))/result$St^(-1) #t-statistics for state 
+  #out$xtxinv <- chol2inv(qx$qr, LINPACK = FALSE)
+  out$vcov = result$St^(-1)#is this cov matrix btw????
+  #out$vcov =  result$Dt
+  out$fit <- result$a.upd #fitted values of y
+  out$mean.fit <- result$ahat #fitted v
+}else{
+  out$fit <- rep(0, out$n)
+}
+if (method==1){
+  out$residuals <-result$v
+}else{
+  out$residuals <-result$v
+}
+######this part needs to be replaces
+# out$residuals2 <- out$residuals^2
+# out$rss <- sum(out$residuals2)
+# out$sigma2 <- solve(result$St) # this is a matrix tho(for each state)
+# if (out$k > 0) {
+#out$vcov <- out$sigma2 * out$xtxinv
+#}
+out$logl <- -out$n * log(2 * pi)/2 - (1/2) * sum(log(result$f) + result$v^2/result$f,na.rm = TRUE)
+return(out)
 }
 
 ############################################
@@ -83,7 +78,7 @@ kfs.arx=function(y, mc = FALSE, mxreg = NULL,
 #LAPACK = LAPACK
 #      plot = FALSE
   ###
-  
+ # mxreg = as.matrix(mxreg)
   vcov.type <- match.arg(vcov.type)
   y.name <- deparse(substitute(y))
   if (is.zoo(y)) {
@@ -191,8 +186,7 @@ kfs.arx=function(y, mc = FALSE, mxreg = NULL,
     estMethod <- which(vcov.type == c("none", "none", "ordinary", 
                                       "white", "newey-west"))
     
-    out=NULL
-    out <- kfs(y,Xt, tol = tol, LAPACK = LAPACK, method = 1)
+    out <- kfs(y,mX, tol = tol, LAPACK = LAPACK, method = 1)
     out$qr <- NULL
     out$rank <- NULL
     out$qraux <- NULL
@@ -210,13 +204,14 @@ kfs.arx=function(y, mc = FALSE, mxreg = NULL,
   #print(str(mXnames))
    # print(out$vcov)
   #print(str(out$vcov))
-    
+    out$vcov = as.matrix(out$vcov)
     colnames(out$vcov) <- mXnames
     rownames(out$vcov) <- mXnames
     stderrs = out$std.error
-    t.stat <- out$coefficients/stderrs
+    t.stat <- out$t.stats
     p.val <- pt(abs(t.stat), out$df, lower.tail = FALSE) * 
       2
+    
     out$mean.results <- as.data.frame(cbind((out$coefficients), 
                                             (stderrs), (t.stat), (p.val)))
     colnames(out$mean.results) <- c("coef", "std.error", 
@@ -231,7 +226,7 @@ kfs.arx=function(y, mc = FALSE, mxreg = NULL,
   out$diagnostics <- diagnostics(out, normality.JarqueB = 0, 
                                  user.fun = user.diagnostics, verbose = TRUE)
  
- # out$mean.fit <- zoo(out$mean.fit, order.by = y.index)
+ out$mean.fit <- zoo(out$mean.fit, order.by = y.index)
   out$residuals <- zoo(out$residuals, order.by = y.index)
   if (!is.null(out$var.fit)) {
     out$var.fit <- zoo(out$var.fit, order.by = y.index)

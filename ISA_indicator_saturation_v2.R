@@ -5,7 +5,7 @@ isat_my=function(y, mc = TRUE, ar = NULL, ewma = NULL, mxreg = NULL,
                do.pet = FALSE, ar.LjungB = NULL, arch.LjungB = NULL, normality.JarqueB = NULL, 
                user.diagnostics = NULL, info.method = c("sc", "aic", "hq"), 
                include.gum = NULL, include.1cut = FALSE, include.empty = FALSE, 
-               max.paths = NULL, parallel.options = NULL, turbo = FALSE, 
+               max.paths = NULL, parallel.options = NULL, turbo =FALSE, 
                tol = 1e-07, LAPACK = FALSE, max.regs = NULL, print.searchinfo = TRUE, 
                plot = NULL, alarm = FALSE,
                #for my version of the code (for a local level model)
@@ -297,7 +297,7 @@ isat_my=function(y, mc = TRUE, ar = NULL, ewma = NULL, mxreg = NULL,
         }
       }
       #this one performs backwards selection of the best model
-      getsis <- getsFun_my(y, mXis, untransformed.residuals = NULL, 
+      getsis <- gets::getsFun(y, mXis, untransformed.residuals = NULL, 
                         user.estimator = list(name = "kfs", tol = tol, 
                                               LAPACK = LAPACK, method = olsMethod), 
                         gum.result = NULL, 
@@ -372,7 +372,7 @@ isat_my=function(y, mc = TRUE, ar = NULL, ewma = NULL, mxreg = NULL,
         colnames(mXis) <- mXisNames
         mXis <- dropvar(mXis, tol = tol, LAPACK = LAPACK, 
                         silent = print.searchinfo)
-        getsis <- getsFun_my(y, mXis, untransformed.residuals = NULL, 
+        getsis <- gets::getsFun(y, mXis, untransformed.residuals = NULL, 
                           user.estimator = list(name ="kfs", tol = tol, 
                                                 LAPACK = LAPACK, method = olsMethod), gum.result = NULL, 
                           t.pval = t.pval, wald.pval = wald.pval, do.pet = do.pet, 
